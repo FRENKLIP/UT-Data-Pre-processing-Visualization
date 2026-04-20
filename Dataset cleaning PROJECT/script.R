@@ -1,0 +1,112 @@
+library(tidyverse)
+ds = msleep
+
+
+## Task 1: Logical Duplicate Handling
+#1. Identify if there are duplicate entries in the name column.
+
+#We use the any function to see if the column NAME has any duplicates
+any(duplicated(ds$name))
+#The function returned FALSE so it means the column has no duplicates
+
+
+#2. Remove a row only if both the name and the genus are identical.
+#We use nrow function to compare the number of rows before and after the distinct of name == genus if any occured
+nrow(ds)
+nrow(distinct(ds, name, genus, .keep_all = TRUE))
+#We can see that number is still the same so no row removed
+
+#3. Rename the column vore to diet_category and conservation to protection_status
+#We use the Rename function to change the name of the column vore and conservation
+ds <- rename(ds , diet_category = vore, protection_status = conservation)
+colnames(ds)
+#We can now see that the columns we wanted have had their name changed
+
+## Task 2: Advanced Imputation
+#1. Calculate the mean of sleep_cycle grouped by the order column
+#We first use GROUPBY function to group the data by their ORDER column and then we use use the summarise of the mean sleep_cycle without NA values
+ds %>%
+  group_by(order) %>%
+  summarise(mean_sleep_cycle = mean(sleep_cycle, na.rm = TRUE))
+#Some of the results are NaN becuase no animal in that ORDER had a value in the sleep
+
+#2. Replace the NA values in sleep_cycle with the average of their respective taxonomic order
+#We do the same group_by as above but now we use mutate to replace any value that is Na to its ORDER average else we keep it as it was
+#Here we also use a counter to see the before and after of how many Na values we have and will have
+sum(is.na(ds$sleep_cycle))
+ds <- ds %>%
+  group_by(order) %>%
+  mutate(sleep_cycle = ifelse(is.na(sleep_cycle), mean(sleep_cycle, na.rm = TRUE), sleep_cycle))
+#After
+sum(is.na(ds$sleep_cycle))
+#We can see that we replaced 39 Na values with their VALUE average
+#We couldnt replace all becuase some classes have no sleep_cycle value at any instance
+
+#3. If an entire order consists of NA values, fill those remaining gaps with the median of the
+#entire sleep_cycle variable.
+#First we get the median of the sleep_cycle column
+med <- median(ds$sleep_cycle , na.rm = TRUE)
+print(med)
+#Then we replace the Na values in that column with the median
+ds$sleep_cycle[is.na(ds$sleep_cycle)] <- med
+sum(is.na(ds$sleep_cycle))
+#Now we can see that we replaced the last 12 remained Na values
+
+## Task 3: Outlier Detection via Log-Transformation
+#1. Apply a log10 transformation to bodywt and store it in a new column log_weight. 2. Using
+#the 1.5 * IQR rule on the log_weight column, identify the upper and lower bounds for outliers.
+#We create another column that is log10 of the bodywt
+ds$log_weight <- log10(ds$bodywt)
+#We find the Q1 and Q3 using the QUANTILE function
+Q1 <- quantile(ds$log_weight, 0.25, na.rm = TRUE)
+Q3 <- quantile(ds$log_weight, 0.75, na.rm = TRUE)
+#We find the IQR using the IQR function
+IQR <- IQR(ds$log_weight, na.rm = TRUE)
+#We find the lower & upper bond using simple math
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+print(paste("The value for Q1 is", Q1))
+print(paste("The value for Q3 is", Q3))
+print(paste("The value for IQR is", IQR))
+print(paste("The value for lower bound is", lower_bound))
+print(paste("The value for upper bound is", upper_bound))
+
+#3. Create a logical column is_outlier that flags rows falling outside these bounds.
+#We create another new column that has the boolean values if a values is or not an outlier
+ds$is_outlier <- ds$log_weight < lower_bound | ds$log_weight > upper_bound
+print(ds$is_outlier)
+#As we can see no value is an outlier
+
+## Task 4: Categorical and Numerical Transformation
+#1. Create a new column animal_class which contains:
+#  • "Megafauna Herbivore": if vore is "herbi" AND bodywt > 200.
+#• "Standard Herbivore": if vore is "herbi" AND bodywt <= 200.
+#• "Non-Vegetarian": if vore is "omni" OR "carni".
+#• "Unclassified": for any other case or NA
+#We created a new column that includes all the condtions above using ifelse for each
+ds$animal_class <- ifelse(ds$diet_category == "herbi" & ds$bodywt > 200, "Megafauna Herbivore",
+                          ifelse(ds$diet_category == "herbi" & ds$bodywt <= 200, "Standard Herbivore",
+                                 ifelse(ds$diet_category == "omni" | ds$diet_category == "carni", "Non-Vegetarian",
+                                        "Unclassified")))
+print(ds$animal_class)
+#The results are 4 varies as expected
+
+#2. Normalize the weight column to a scale of 0 to 1 (Min-Max Scaling) and store the values in a new
+#column
+#We use the Normalization formula to normalize the values to 0-1 scale
+ds$bodywt_scaled <- (ds$bodywt - min(ds$bodywt, na.rm = TRUE)) / (max(ds$bodywt, na.rm = TRUE) - min(ds$bodywt, na.rm = TRUE))
+print(round(ds$bodywt_scaled , 3))
+#The results are as expected all the values expand on a 0-1 range
+
+## Task 5: The Pipeline Challenge
+#Write a single continuous dplyr pipe that:
+#1. Filters for animals with a brainwt greater than the average.
+#2. Computes sleep_efficiency as (sleep_total / 24) * 100.
+#3. Selects only name, sleep_efficiency, and protection_status.
+#4. Arranges the results by sleep_efficiency in descending order.
+#We use the FILTER function to filter the data greater than the mean , We use the MUTATE to get a new column that has (sleep_total / 24) * 100 values in it , We use the SELECT to only select the three columns we need and , We use arrange to arrange the results in desending order by sleep
+ds %>%
+  filter(brainwt > mean(brainwt, na.rm = TRUE)) %>%
+  mutate(sleep_efficiency = (sleep_total / 24) * 100) %>%
+  select(name, sleep_efficiency, protection_status) %>%
+  arrange(desc(sleep_efficiency))
