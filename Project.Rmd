@@ -1,0 +1,769 @@
+---
+title: "Why Do Employees Leave?"
+subtitle: "HR Attrition Analysis — IBM Dataset"
+author: "Frenkli Paluku & Fatir Beqollari | Data Science, Faculty of Natural Sciences, Tirana"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: flatly
+    highlight: tango
+    css: |
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap');
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #0f1117;
+        color: #e2e8f0;
+        font-size: 15px;
+        line-height: 1.75;
+      }
+
+      h1, h2, h3 {
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        color: #f8fafc;
+        letter-spacing: -0.5px;
+      }
+
+      h1.title {
+        font-size: 2.4em;
+        color: #60a5fa;
+        border-bottom: 3px solid #3b82f6;
+        padding-bottom: 12px;
+        margin-bottom: 6px;
+      }
+
+      h3.subtitle {
+        color: #94a3b8;
+        font-weight: 400;
+        font-size: 1.1em;
+        margin-top: 0;
+      }
+
+      h4.author {
+        color: #60a5fa;
+        font-size: 0.95em;
+        font-weight: 600;
+      }
+
+      h4.date {
+        color: #64748b;
+        font-size: 0.85em;
+        font-weight: 400;
+      }
+
+      /* Section headings */
+      .section h1 { color: #60a5fa; border-left: 4px solid #3b82f6; padding-left: 14px; }
+      .section h2 { color: #93c5fd; border-left: 3px solid #60a5fa; padding-left: 10px; }
+      .section h3 { color: #bfdbfe; font-size: 1.05em; }
+
+      /* Code blocks */
+      pre, code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82em;
+        background-color: #1e2433 !important;
+        color: #a5f3fc !important;
+        border: 1px solid #2d3748;
+        border-radius: 8px;
+      }
+
+      pre {
+        padding: 14px 18px;
+        overflow-x: auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+
+      /* TOC */
+      #TOC {
+        background-color: #1a1f2e;
+        border: 1px solid #2d3748;
+        border-radius: 10px;
+        padding: 16px;
+        font-size: 0.88em;
+      }
+
+      #TOC a { color: #94a3b8; text-decoration: none; }
+      #TOC a:hover { color: #60a5fa; }
+      #TOC li.active > a { color: #60a5fa; font-weight: 600; }
+
+      /* Tables */
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background-color: #1a1f2e;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 16px 0;
+        font-size: 0.9em;
+      }
+
+      th {
+        background-color: #1e3a5f;
+        color: #93c5fd;
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 0.8em;
+      }
+
+      td {
+        padding: 10px 16px;
+        color: #cbd5e1;
+        border-bottom: 1px solid #2d3748;
+      }
+
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background-color: #1e2433; }
+
+      /* Blockquotes as callout boxes */
+      blockquote {
+        background-color: #1e2d45;
+        border-left: 4px solid #3b82f6;
+        border-radius: 0 8px 8px 0;
+        margin: 20px 0;
+        padding: 14px 20px;
+        color: #bfdbfe;
+        font-size: 0.95em;
+      }
+
+      /* Links */
+      a { color: #60a5fa; }
+      a:hover { color: #93c5fd; }
+
+      /* Main content area */
+      .main-container { max-width: 960px; }
+
+      /* Horizontal rules */
+      hr { border-color: #2d3748; margin: 28px 0; }
+
+      /* Strong text */
+      strong { color: #93c5fd; }
+
+      /* Plot container */
+      img { border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+---
+
+---
+
+# Executive Summary
+
+This project looks at **why employees leave their jobs**, using data from 1,470 IBM employees. We cleaned the data, explored it, and visualized the key patterns.
+
+> **Bottom line in one sentence:** The biggest reason employees leave is **working overtime** — they leave at nearly 3× the rate of employees who don't.
+
+**The 4 main findings:**
+
+| Factor | Finding |
+|---|---|
+| Overtime | Overtime workers leave at **30.5%** vs. **10.4%** — the biggest gap we found |
+| Age | Employees aged **18–25 leave at 35.8%** — double the company average |
+| Department | **Sales (20.6%)** and **HR (19%)** are the most at-risk departments |
+| Distance | Employees living far from work leave **more often** |
+
+The overall attrition rate is **16.1%** — about 1 in 6 employees left.
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center"
+)
+```
+
+# Setup
+
+## Libraries
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(skimr)
+library(corrplot)
+library(gridExtra)
+library(RColorBrewer)
+```
+
+## Custom Plot Theme
+
+We built a custom dark theme that matches the report's style. Every chart in this project uses it.
+
+```{r}
+# Dark palette — two main colors for attrition groups
+pal_main  <- c("#3b82f6", "#ef4444")   # blue = stayed, red = left
+pal_multi <- c("#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe")
+
+my_theme <- theme_minimal(base_size = 13) +
+  theme(
+    # Background
+    plot.background    = element_rect(fill = "#0f1117", color = NA),
+    panel.background   = element_rect(fill = "#1a1f2e", color = NA),
+    panel.grid.major   = element_line(color = "#2d3748", linewidth = 0.4),
+    panel.grid.minor   = element_blank(),
+
+    # Text
+    plot.title         = element_text(size = 15, face = "bold",
+                                      color = "#f8fafc", margin = margin(b = 4)),
+    plot.subtitle      = element_text(size = 11, color = "#94a3b8",
+                                      margin = margin(b = 10)),
+    axis.title         = element_text(size = 11, color = "#94a3b8"),
+    axis.text          = element_text(size = 10, color = "#cbd5e1"),
+
+    # Legend
+    legend.background  = element_rect(fill = "#1a1f2e", color = NA),
+    legend.text        = element_text(color = "#cbd5e1"),
+    legend.title       = element_text(color = "#94a3b8", face = "bold"),
+
+    # Borders
+    plot.margin        = margin(16, 16, 16, 16)
+  )
+```
+
+---
+
+# Loading the Data
+
+```{r}
+HR_Employee_Attrition <- read_csv("HR-Employee-Attrition.csv")
+```
+
+## First Look
+
+```{r}
+skim(HR_Employee_Attrition)
+```
+
+**What we see:**
+
+- **1,470 employees**, **35 columns**
+- **No missing values** anywhere — the data is clean from the start
+- 3 columns (`EmployeeCount`, `StandardHours`, `Over18`) are the **same value for every row** — they tell us nothing, so we'll drop them
+
+---
+
+# Data Cleaning
+
+## Step 1 — Pick the Useful Columns
+
+We keep 8 columns that are most relevant to attrition. The other 27 are either IDs, constants, or outside our focus.
+
+```{r}
+HR_Kept <- HR_Employee_Attrition %>%
+  select(Age, Attrition, BusinessTravel, DailyRate,
+         Department, DistanceFromHome, Education, OverTime)
+
+head(HR_Kept)
+```
+
+## Step 2 — Rename for Clarity
+
+Shorter, cleaner names make the code easier to read.
+
+```{r}
+HR_Renamed <- HR_Kept %>%
+  rename(
+    Left     = Attrition,
+    Pay      = DailyRate,
+    Distance = DistanceFromHome,
+    Travel   = BusinessTravel,
+    Overtime = OverTime
+  )
+
+head(HR_Renamed)
+```
+
+## Step 3 — Check for Missing Values
+
+```{r}
+colSums(is.na(HR_Renamed))
+```
+
+All zeros. **No missing data** — nothing to fix here.
+
+## Step 4 — Remove Duplicates
+
+```{r}
+HR_NoDupes <- HR_Renamed %>% distinct()
+any(duplicated(HR_NoDupes))
+```
+
+`FALSE` means no duplicates. All 1,470 rows are unique.
+
+## Step 5 — Convert Yes/No to 1/0
+
+Computers work better with numbers. We turn `Left` and `Overtime` from text into 1 (Yes) or 0 (No).
+
+```{r}
+HR_Numericals <- HR_NoDupes %>%
+  mutate(
+    Left     = ifelse(Left == "Yes", 1, 0),
+    Overtime = ifelse(Overtime == "Yes", 1, 0)
+  )
+
+head(HR_Numericals)
+```
+
+---
+
+# Feature Engineering
+
+We create **4 new columns** to make patterns easier to see in charts.
+
+```{r}
+HR_Final <- HR_Numericals %>%
+  mutate(
+    # Group age into life stages
+    AgeGroup = cut(Age,
+      breaks = c(18, 25, 35, 45, 55, 60),
+      labels = c("18-25", "26-35", "36-45", "46-55", "56-60"),
+      include.lowest = TRUE),
+
+    # Group commute distance into bands
+    DistanceGroup = cut(Distance,
+      breaks = c(0, 5, 10, 20, 30),
+      labels = c("Very Close", "Close", "Moderate", "Far"),
+      include.lowest = TRUE),
+
+    # Turn education codes into readable labels (ordered so charts sort correctly)
+    EducationLevel = factor(
+      case_when(
+        Education == 1 ~ "Below College",
+        Education == 2 ~ "College",
+        Education == 3 ~ "Bachelor",
+        Education == 4 ~ "Master",
+        Education == 5 ~ "Doctor"
+      ),
+      levels  = c("Below College","College","Bachelor","Master","Doctor"),
+      ordered = TRUE),
+
+    # Standardize pay so it can be compared in correlation (mean=0, sd=1)
+    PayScaled = as.numeric(scale(Pay))
+  )
+
+head(HR_Final)
+```
+
+**What each new column does:**
+
+- `AgeGroup` — splits age into 5 career stages for cleaner bar charts
+- `DistanceGroup` — turns raw distance numbers into 4 meaningful bands
+- `EducationLevel` — readable labels, sorted correctly (not alphabetically)
+- `PayScaled` — standardized pay used in the correlation analysis
+
+---
+
+# Exploratory Analysis
+
+## Age Range
+
+```{r}
+range(HR_Final$Age)
+```
+
+Employees are between **18 and 60 years old** — the full working-age range.
+
+## How Many Employees Left?
+
+```{r}
+table(HR_Final$Left)
+prop.table(table(HR_Final$Left)) * 100
+```
+
+**237 employees left (16.1%)**, 1,233 stayed (83.9%).
+
+Because leavers are the minority, we'll always use **percentages**, not raw counts. Otherwise "stayed" would always dominate the charts and hide the real patterns.
+
+---
+
+# Summary Statistics
+
+## Overall Attrition Rate
+
+```{r}
+mean(HR_Final$Left) * 100
+```
+
+**16.1%** is our company baseline. Any group above this is more at risk than average.
+
+## By Overtime
+
+```{r}
+HR_Final %>%
+  group_by(Overtime) %>%
+  summarise(AttritionRate = round(mean(Left) * 100, 1))
+```
+
+> **30.5% vs 10.4%** — overtime workers leave at nearly 3 times the rate. This is the biggest difference in the entire dataset.
+
+## By Department
+
+```{r}
+HR_Final %>%
+  group_by(Department) %>%
+  summarise(AttritionRate = round(mean(Left) * 100, 1))
+```
+
+> **Sales (20.6%) and HR (19%)** are above the 16.1% average. R&D (13.8%) is the most stable.
+
+## By Age Group
+
+```{r}
+HR_Final %>%
+  group_by(AgeGroup) %>%
+  summarise(AttritionRate = round(mean(Left) * 100, 1))
+```
+
+> The **18–25 group leaves at 35.8%** — more than double the company average. Attrition falls sharply after age 35.
+
+---
+
+# Visualizations
+
+## Attrition by Age Group
+
+```{r fig.width=8, fig.height=5}
+p1 <- HR_Final %>%
+  group_by(AgeGroup) %>%
+  summarise(AttritionRate = mean(Left) * 100) %>%
+  ggplot(aes(x = AgeGroup, y = AttritionRate, fill = AgeGroup)) +
+  geom_col() +
+  geom_hline(yintercept = 16.1, linetype = "dashed",
+             color = "#f59e0b", linewidth = 0.8) +
+  annotate("text", x = 4.6, y = 17.5, label = "Avg: 16.1%",
+           color = "#f59e0b", size = 3.5, fontface = "bold") +
+  scale_fill_manual(values = pal_multi) +
+  labs(title    = "Attrition Rate by Age Group",
+       subtitle = "Dashed line = company average (16.1%)",
+       x = "Age Group", y = "Attrition Rate (%)") +
+  my_theme + theme(legend.position = "none")
+
+p1
+```
+
+**The 18–25 group is at 35.8%** — way above the average. After 35, most employees stabilize. Younger employees are harder to retain — likely due to fewer ties, more career exploration, and less seniority.
+
+## Attrition by Overtime
+
+```{r fig.width=7, fig.height=5}
+p2 <- HR_Final %>%
+  group_by(Overtime) %>%
+  summarise(AttritionRate = mean(Left) * 100) %>%
+  ggplot(aes(x = factor(Overtime, labels = c("No Overtime","Overtime")),
+             y = AttritionRate,
+             fill = factor(Overtime))) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(AttritionRate, 1), "%")),
+            vjust = -0.5, color = "#f8fafc", size = 5, fontface = "bold") +
+  scale_fill_manual(values = c("#3b82f6","#ef4444")) +
+  labs(title    = "Attrition Rate by Overtime",
+       subtitle = "Overtime nearly triples the chance of leaving",
+       x = NULL, y = "Attrition Rate (%)") +
+  my_theme + theme(legend.position = "none")
+
+p2
+```
+
+**30.5% vs 10.4%.** This is the single clearest pattern in the data — working overtime is the strongest predictor of attrition.
+
+## Attrition by Department
+
+```{r fig.width=8, fig.height=5}
+p3 <- HR_Final %>%
+  group_by(Department) %>%
+  summarise(AttritionRate = mean(Left) * 100) %>%
+  ggplot(aes(x = reorder(Department, AttritionRate),
+             y = AttritionRate, fill = AttritionRate)) +
+  geom_col() +
+  geom_hline(yintercept = 16.1, linetype = "dashed",
+             color = "#f59e0b", linewidth = 0.8) +
+  coord_flip() +
+  scale_fill_gradient(low = "#3b82f6", high = "#ef4444") +
+  labs(title    = "Attrition Rate by Department",
+       subtitle = "Sorted by attrition — dashed = company average",
+       x = NULL, y = "Attrition Rate (%)") +
+  my_theme + theme(legend.position = "none")
+
+p3
+```
+
+**Sales is the most at-risk department at 20.6%**, followed closely by HR. R&D at 13.8% is the most stable — likely due to more specialized roles and clearer career ladders.
+
+## Attrition by Distance from Home
+
+```{r fig.width=8, fig.height=5}
+p4 <- HR_Final %>%
+  group_by(DistanceGroup) %>%
+  summarise(AttritionRate = mean(Left) * 100) %>%
+  ggplot(aes(x = DistanceGroup, y = AttritionRate, fill = DistanceGroup)) +
+  geom_col() +
+  scale_fill_manual(values = pal_multi) +
+  labs(title    = "Attrition Rate by Distance from Home",
+       subtitle = "Longer commutes = higher chance of leaving",
+       x = "Distance Band", y = "Attrition Rate (%)") +
+  my_theme + theme(legend.position = "none")
+
+p4
+```
+
+Employees living far from work leave more. The effect is real but smaller than overtime or age — commute alone rarely causes attrition, but it adds up alongside other pressures.
+
+## Combined View
+
+```{r fig.width=13, fig.height=10}
+grid.arrange(p1, p2, p3, p4, ncol = 2,
+             top = grid::textGrob("Four Key Drivers of Employee Attrition",
+                                  gp = grid::gpar(fontsize = 16,
+                                                  fontface = "bold",
+                                                  col = "#f8fafc")))
+```
+
+---
+
+# Advanced Visualizations
+
+## Heatmap: Department × Overtime
+
+This chart shows what happens when two risk factors combine.
+
+```{r fig.width=9, fig.height=5}
+HR_Final %>%
+  group_by(Department, Overtime) %>%
+  summarise(AttritionRate = mean(Left) * 100, .groups = "drop") %>%
+  ggplot(aes(x = Department,
+             y = factor(Overtime, labels = c("No Overtime","Overtime")),
+             fill = AttritionRate)) +
+  geom_tile(color = "#0f1117", linewidth = 1.5) +
+  geom_text(aes(label = paste0(round(AttritionRate, 1), "%")),
+            size = 6, fontface = "bold", color = "white") +
+  scale_fill_gradient(low = "#1e3a5f", high = "#dc2626") +
+  labs(title    = "Attrition Heatmap: Department × Overtime",
+       subtitle = "Darkest red = highest risk group",
+       x = NULL, y = NULL, fill = "Attrition %") +
+  my_theme
+```
+
+**Sales + Overtime is the highest-risk combination** in the company. This is something a simple bar chart can't reveal — you need to look at two factors together. An employee in Sales who works overtime is at serious risk of leaving.
+
+---
+
+# Boxplots — Distributions, Not Just Averages
+
+A boxplot shows the **full spread** of values, not just the average. The line in the middle is the median.
+
+## Pay by Attrition
+
+```{r fig.width=7, fig.height=5}
+ggplot(HR_Final,
+       aes(x = factor(Left, labels = c("Stayed","Left")),
+           y = Pay, fill = factor(Left))) +
+  geom_boxplot(outlier.color = "#f59e0b", outlier.size = 1.5) +
+  scale_fill_manual(values = c("#3b82f6","#ef4444")) +
+  labs(title    = "Daily Pay by Attrition Status",
+       subtitle = "Similar medians — pay alone doesn't explain leaving",
+       x = NULL, y = "Daily Pay Rate") +
+  my_theme + theme(legend.position = "none")
+```
+
+Both groups have nearly identical pay distributions. **Pay rate is not a meaningful driver of attrition** in this dataset.
+
+## Age by Attrition
+
+```{r fig.width=7, fig.height=5}
+ggplot(HR_Final,
+       aes(x = factor(Left, labels = c("Stayed","Left")),
+           y = Age, fill = factor(Left))) +
+  geom_boxplot(outlier.color = "#f59e0b", outlier.size = 1.5) +
+  scale_fill_manual(values = c("#3b82f6","#ef4444")) +
+  labs(title    = "Age Distribution by Attrition Status",
+       subtitle = "Employees who left are notably younger",
+       x = NULL, y = "Age") +
+  my_theme + theme(legend.position = "none")
+```
+
+The median age is clearly **lower for employees who left**. This confirms the age group bar chart — younger employees leave more.
+
+## Distance by Attrition
+
+```{r fig.width=7, fig.height=5}
+ggplot(HR_Final,
+       aes(x = factor(Left, labels = c("Stayed","Left")),
+           y = Distance, fill = factor(Left))) +
+  geom_boxplot(outlier.color = "#f59e0b", outlier.size = 1.5) +
+  scale_fill_manual(values = c("#3b82f6","#ef4444")) +
+  labs(title    = "Commute Distance by Attrition Status",
+       subtitle = "Employees who left lived slightly further away",
+       x = NULL, y = "Distance from Home") +
+  my_theme + theme(legend.position = "none")
+```
+
+The difference is modest — commute contributes to attrition but isn't the main cause by itself.
+
+---
+
+# Pay Distribution — Histogram
+
+```{r fig.width=8, fig.height=5}
+ggplot(HR_Final, aes(x = Pay)) +
+  geom_histogram(bins = 30, fill = "#3b82f6", color = "#0f1117", alpha = 0.85) +
+  labs(title    = "Distribution of Daily Pay",
+       subtitle = "Spread evenly — no salary cluster stands out",
+       x = "Daily Pay Rate", y = "Number of Employees") +
+  my_theme
+```
+
+Pay is spread fairly evenly across all salary levels. There's no obvious cluster, which is part of why pay doesn't separate leavers from stayers.
+
+---
+
+# Scatterplot — Age vs Pay
+
+```{r fig.width=9, fig.height=6}
+ggplot(HR_Final,
+       aes(x = Age, y = Pay,
+           color = factor(Left, labels = c("Stayed","Left")))) +
+  geom_jitter(size = 1.6, alpha = 0.45, width = 0.5) +
+  scale_color_manual(values = c("#3b82f6","#ef4444")) +
+  labs(title    = "Age vs Daily Pay — by Attrition Status",
+       subtitle = "Red and blue are mixed together — no clear separation",
+       x = "Age", y = "Daily Pay Rate", color = "Status") +
+  my_theme
+```
+
+The red dots (left) and blue dots (stayed) are mixed throughout the entire chart. **No region is dominated by one group.** Age and pay together do not predict attrition well — the real driver is overtime.
+
+---
+
+# Correlation Analysis
+
+We measure how strongly each variable is mathematically linked to attrition. `PayScaled` is the standardized version of Pay, included so it can be compared fairly.
+
+```{r}
+cor_data <- HR_Final %>%
+  select(Age, PayScaled, Distance, Overtime, Left)
+
+cor_matrix <- cor(cor_data)
+round(cor_matrix, 3)
+```
+
+## Correlation Heatmap
+
+```{r fig.width=8, fig.height=6}
+corrplot(cor_matrix,
+         method      = "color",
+         type        = "upper",
+         addCoef.col = "#f8fafc",
+         number.cex  = 0.85,
+         tl.cex      = 0.9,
+         tl.col      = "#e2e8f0",
+         col         = colorRampPalette(c("#1e3a5f","#0f1117","#7f1d1d"))(200),
+         bg          = "#1a1f2e",
+         mar         = c(0, 0, 1, 0))
+```
+
+**Reading the `Left` column:**
+
+| Variable | Correlation with Attrition | Meaning |
+|---|---|---|
+| Overtime | **+0.25** | Strongest link — overtime → more likely to leave |
+| Age | **–0.16** | Older → less likely to leave |
+| Distance | +0.08 | Slight effect — farther = slightly more likely to leave |
+| PayScaled | –0.06 | Almost no link — pay barely matters |
+
+These numbers confirm everything we saw in the charts.
+
+---
+
+# Unique Analysis: Attrition Risk Score
+
+*This section calculates a simple risk score for each employee — something that goes beyond individual charts and combines factors into a single number.*
+
+We assign points based on the three most impactful factors: **Overtime, Age Group, and Department**. An employee with all three risk factors gets the highest score.
+
+```{r fig.width=9, fig.height=5}
+# Assign risk points to each employee
+HR_Risk <- HR_Final %>%
+  mutate(
+    # +3 for overtime (biggest factor)
+    RiskOT   = ifelse(Overtime == 1, 3, 0),
+
+    # +2 for being in the youngest group, +1 for 26-35
+    RiskAge  = case_when(
+      AgeGroup == "18-25" ~ 2,
+      AgeGroup == "26-35" ~ 1,
+      TRUE ~ 0
+    ),
+
+    # +1 for being in Sales or HR (above-average departments)
+    RiskDept = ifelse(Department %in% c("Sales","Human Resources"), 1, 0),
+
+    # Total risk score 0-6
+    RiskScore = RiskOT + RiskAge + RiskDept
+  )
+
+# Actual attrition rate for each risk score
+risk_summary <- HR_Risk %>%
+  group_by(RiskScore) %>%
+  summarise(
+    Employees     = n(),
+    AttritionRate = round(mean(Left) * 100, 1)
+  )
+
+risk_summary
+
+# Plot
+ggplot(risk_summary,
+       aes(x = factor(RiskScore), y = AttritionRate, fill = AttritionRate)) +
+  geom_col() +
+  geom_text(aes(label = paste0(AttritionRate, "%\n(n=", Employees, ")")),
+            vjust = -0.4, color = "#f8fafc", size = 3.8, fontface = "bold") +
+  scale_fill_gradient(low = "#1e3a5f", high = "#dc2626") +
+  labs(
+    title    = "Attrition Rate by Composite Risk Score",
+    subtitle = "Score combines Overtime (3pts) + Age Risk (2pts) + Department Risk (1pt)",
+    x        = "Risk Score (0 = Low Risk, 6 = Highest Risk)",
+    y        = "Actual Attrition Rate (%)"
+  ) +
+  my_theme + theme(legend.position = "none")
+```
+
+**This is the key takeaway from the whole project.** Employees with a risk score of 0 (no risk factors) leave at just ~8%. Employees with a score of 5–6 (all risk factors) can leave at over 50%. This shows that **risk factors multiply each other** — they don't just add up independently.
+
+---
+
+# Conclusion
+
+We analyzed 1,470 employee records to understand what drives attrition. Here's what the data shows:
+
+| # | Finding | In plain words |
+|---|---|---|
+| 1 | **Overtime → 30.5% attrition** | Overworked employees leave. Simple. |
+| 2 | **Age 18–25 → 35.8% attrition** | Young employees are hard to keep. |
+| 3 | **Sales & HR above average** | These departments need more attention. |
+| 4 | **Far distance → higher attrition** | Long commutes add up over time. |
+| 5 | **Pay rate → almost no effect** | Paying more daily doesn't fix the core issues. |
+
+The preprocessing steps (removing constants, checking for missing values, renaming, encoding, and engineering features) were essential — they turned a messy 35-column dataset into something we could actually analyze and visualize clearly.
+
+---
+
+# Recommendations
+
+Based on the data, here is what the company should prioritize:
+
+1. **Cut overtime** — especially in Sales. It's the #1 predictor and the most directly fixable.
+2. **Support young employees** — mentorship, career growth plans, and clear promotion paths help the 18–25 group stay.
+3. **Investigate Sales and HR** — exit interview data from these departments would reveal what's not in the numbers.
+4. **Offer flexibility for long commuters** — remote or hybrid work options reduce commute stress before it becomes a reason to quit.
+
+---
+
+*Frenkli Paluku & Fatir Beqollari — Data Science, Faculty of Natural Sciences, University of Tirana*
