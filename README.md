@@ -172,6 +172,3 @@ Based on the analysis, the company should prioritize:
 **Frenkli Paluku** and **Fatir Beqollari**  
 Data Science, Faculty of Natural Sciences, University of Tirana
 
-## License
-
-This project is for educational and academic purposes. Add a license such as MIT if you want others to reuse or modify the code.
